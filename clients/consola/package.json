@@ -1,0 +1,20 @@
+{
+  "name": "@cqrs/consola",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cliente de consola: se suscribe al broadcast (Socket.IO) y muestra los eventos en vivo",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.5",
+    "amqplib": "^0.10.4",
+    "vitest": "^2.1.0"
+  }
+}
