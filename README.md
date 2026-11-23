@@ -112,6 +112,18 @@ En PowerShell: `$env:ROLES="api"; $env:PORT=3000; npm run start:server`. El clie
 Socket.IO (`VITE_API_URL`), así que con él conviene `ROLES=api,broadcast` en un proceso; el proyector sí puede ir aparte.
 La consola solo usa Socket.IO, de modo que puede apuntar directamente a un proceso `broadcast` (`--url http://localhost:3002`).
 
+## Cliente web: intranet "Nexora"
+
+El cliente web simula la intranet de una empresa (**Nexora**): los *canales* son las salas del dominio (por área: General,
+Finanzas, Tecnología...), y los empleados tienen nombre, cargo y área. Al abrir la web se elige con qué empleado entrar
+(abre otra ventana con otro empleado para ver el broadcast). Incluye mensajes con avatar y cargo, contador de no leídos por
+canal y un panel **"Flujo de datos en vivo"** que ilumina el camino Comando → `event_store` → RabbitMQ → Proyector + Broadcast
+→ Clientes cada vez que llega un evento, con el id de evento, su versión y la latencia de entrega.
+
+- Los empleados y cargos son **datos de demostración del cliente** (`clients/web/src/empresa.ts`): el servidor no los conoce y sigue
+  con solo tres tablas. El cargo viaja dentro del campo `autor` como `Nombre · Cargo`.
+- El permiso "solo Gerente, Directora o Líder crean canales" es de interfaz (demostrativo); no hay autenticación real.
+
 ## Demostración rápida
 
 `npm run demo` levanta el servidor completo, conecta un cliente en vivo, envía comandos, muestra los eventos recibidos por
