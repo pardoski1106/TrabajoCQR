@@ -93,8 +93,9 @@ npm run dev:consola -- --url http://localhost:3000 --sala <uuid-de-sala>
 ```
 
 > Si ya tienes un RabbitMQ local usando el puerto 5672, no hace falta Docker: apunta `RABBITMQ_URL` a él.
-> PostgreSQL local opcional (en lugar de la nube): `docker compose --profile local-db up -d`, con
-> `DATABASE_URL=postgresql://cqrs:cqrs@localhost:5432/cqrs`.
+> PostgreSQL local opcional (en lugar de la nube): `docker compose --profile local-db up -d postgres`, con
+> `DATABASE_URL=postgresql://cqrs:cqrs@localhost:5432/cqrs`. Si el 5432 está ocupado, usa otro puerto:
+> `POSTGRES_PORT=5440 docker compose --profile local-db up -d postgres` y `...@localhost:5440/cqrs`.
 
 ### Ejecutar los componentes por separado
 
@@ -167,6 +168,11 @@ npm test
   - `server/tests/integration/broadcast.test.ts`: RabbitMQ → Socket.IO → clientes por sala. Requiere RabbitMQ.
   - `clients/consola/tests/broadcast.test.ts`: levanta el servidor real (`ROLES=broadcast`), publica un evento en RabbitMQ y
     comprueba que el cliente de consola lo recibe. Requiere RabbitMQ.
+
+Última ejecución verificada (PostgreSQL 16 local en Docker + RabbitMQ local): `npm run lint` y `npm run typecheck` sin errores;
+`npm test` con 52 pruebas en el servidor (incluye 7 de integración) y 3 en la consola, todas en verde; `npm run demo` completa el flujo.
+Para ejecutar las pruebas de integración: `TEST_DATABASE_URL=postgresql://cqrs:cqrs@localhost:5440/cqrs npm test`
+(PowerShell: `$env:TEST_DATABASE_URL="..."; npm test`).
 
 Las pruebas usan un exchange con nombre único por ejecución y lo borran al terminar.
 

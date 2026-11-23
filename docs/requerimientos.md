@@ -18,7 +18,7 @@ Origen: lo pedido por el profesor ("proponer soluciones con conexiones broadcast
 
 ## Estado de cumplimiento y verificación
 
-- **Código:** `npm run typecheck`, `npm run lint` y las pruebas unitarias (45 en el servidor y 2 en la consola) pasan.
-- **Pruebas que requieren infraestructura** (integración comando → event_store → proyección → consulta; broadcast hacia el cliente de consola;
-  `npm run demo`): se ejecutan cuando existen PostgreSQL (`TEST_DATABASE_URL`) y RabbitMQ locales. Ver el estado de su última ejecución en el README.
+- **Código:** `npm run typecheck`, `npm run lint` y `npm test` pasan (52 pruebas en el servidor, 3 en la consola).
+- **Verificado con infraestructura real** (PostgreSQL 16 en Docker y RabbitMQ local): integración comando → event_store → proyección → consulta,
+  broadcast por salas, broadcast hacia el cliente de consola y `npm run demo`. Las de integración se omiten solas si falta `TEST_DATABASE_URL` o RabbitMQ.
 - **R9** queda completo cuando se cree la base en la nube (la cuenta y las credenciales las aporta el usuario; ver `docs/despliegue-nube.md`).

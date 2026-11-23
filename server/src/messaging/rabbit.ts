@@ -58,32 +58,60 @@ export class RabbitBus implements EventPublisher {
       : await channel.assertQueue('', { exclusive: true, autoDelete: true });
     await channel.bindQueue(q.queue, this.exchange, '');
 
+    let inflight = 0;
+    // ack/nack sobre un canal ya cerrado lanzan error: durante el apagado se ignoran
+    // (RabbitMQ reentrega el mensaje sin confirmar a otro consumidor).
+    const settle = (fn: () => void): void => {
+      try {
+        fn();
+      } catch (err) {
+        this.log.warn({ err, consumer: options.name }, 'No se pudo confirmar el mensaje (canal cerrado)');
+      }
+    };
+
     const { consumerTag } = await channel.consume(q.queue, async (msg) => {
       if (!msg) return;
-      let event: DomainEvent;
+      inflight++;
       try {
-        event = domainEventSchema.parse(JSON.parse(msg.content.toString('utf8')));
-      } catch (err) {
-        // Mensaje malformado: reintentar no sirve; se descarta.
-        this.log.error({ err, consumer: options.name }, 'Mensaje invalido descartado');
-        channel.nack(msg, false, false);
-        return;
-      }
-      try {
-        await handler(event);
-        channel.ack(msg);
-      } catch (err) {
-        // Un reintento (requeue); si ya fue reentregado, se descarta para no hacer bucle infinito.
-        const giveUp = msg.fields.redelivered;
-        this.log.error({ err, consumer: options.name, eventId: event.id, giveUp }, 'Fallo al procesar el evento');
-        channel.nack(msg, false, !giveUp);
+        await this.handleMessage(msg, options.name, handler, settle, channel);
+      } finally {
+        inflight--;
       }
     });
 
     return async () => {
       await channel.cancel(consumerTag);
+      // Espera a que terminen los mensajes en proceso antes de cerrar el canal.
+      for (let i = 0; inflight > 0 && i < 100; i++) await new Promise((r) => setTimeout(r, 50));
       await channel.close();
     };
+  }
+
+  private async handleMessage(
+    msg: amqp.ConsumeMessage,
+    name: string,
+    handler: (event: DomainEvent) => Promise<void> | void,
+    settle: (fn: () => void) => void,
+    channel: amqp.Channel,
+  ): Promise<void> {
+    let event: DomainEvent;
+    try {
+      event = domainEventSchema.parse(JSON.parse(msg.content.toString('utf8')));
+    } catch (err) {
+      // Mensaje malformado: reintentar no sirve; se descarta.
+      this.log.error({ err, consumer: name }, 'Mensaje invalido descartado');
+      settle(() => channel.nack(msg, false, false));
+      return;
+    }
+    try {
+      await handler(event);
+      settle(() => channel.ack(msg));
+    } catch (err) {
+      // Un reintento (requeue); si ya fue reentregado, se descarta para no hacer bucle infinito.
+      const giveUp = msg.fields.redelivered;
+      this.log.error({ err, consumer: name, eventId: event.id, giveUp }, 'Fallo al procesar el evento');
+      settle(() => channel.nack(msg, false, !giveUp));
+    }
   }
 
   /** Borra exchange y colas indicadas (solo para pruebas). */
