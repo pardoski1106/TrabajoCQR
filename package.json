@@ -1,0 +1,31 @@
+{
+  "name": "trabajo-cqrs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mensajeria por salas con CQRS, RabbitMQ (fanout), PostgreSQL y broadcast con Socket.IO",
+  "type": "module",
+  "workspaces": ["server", "clients/web", "clients/consola"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "migrate": "npm run migrate -w server",
+    "verify:db": "npm run verify:db -w server",
+    "dev:server": "npm run dev -w server",
+    "start:server": "npm run start -w server",
+    "dev:web": "npm run dev -w clients/web",
+    "dev:consola": "npm run start -w clients/consola",
+    "republish": "tsx scripts/republicar.ts",
+    "demo": "tsx scripts/demo.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "socket.io-client": "^4.8.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
