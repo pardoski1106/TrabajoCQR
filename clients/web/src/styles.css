@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f4f5f7; color: #1d2330; }
+.layout { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+aside { background: #1d2330; color: #fff; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+aside h1 { margin: 0; font-size: 20px; }
+aside ul { list-style: none; padding: 0; margin: 0; flex: 1; }
+aside li button { width: 100%; text-align: left; background: none; border: 0; color: #cfd6e4; padding: 8px; border-radius: 6px; cursor: pointer; }
+aside li button:hover, aside li button.activa { background: #34405a; color: #fff; }
+aside form { display: flex; flex-direction: column; gap: 8px; }
+.estado { font-size: 12px; color: #f0a; }
+.estado.ok { color: #4ade80; }
+main { padding: 16px 24px; display: flex; flex-direction: column; min-height: 0; }
+.mensajes { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
+.mensajes li { background: #fff; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+.mensajes p { margin: 4px 0 0; }
+time { font-size: 12px; color: #667; margin-left: 6px; }
+.enviar { display: grid; grid-template-columns: 160px 1fr auto; gap: 8px; margin-top: 12px; }
+input { padding: 8px; border: 1px solid #c5cad6; border-radius: 6px; }
+button { padding: 8px 12px; border: 0; border-radius: 6px; background: #3b6cf6; color: #fff; cursor: pointer; }
+.error { background: #fde8e8; color: #9b1c1c; padding: 8px 12px; border-radius: 6px; }
+.vacio { color: #667; }
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .enviar { grid-template-columns: 1fr; }
+}
