@@ -17,6 +17,7 @@ mensajería con **broadcast en tiempo real**: servidor aparte, dos clientes dist
 | [docs/decisiones-tecnologicas.md](docs/decisiones-tecnologicas.md) | Qué es cada tecnología, por qué, alternativas (incl. Redis descartado), archivos, tecnologías nuevas |
 | [docs/requerimientos.md](docs/requerimientos.md) | R1–R9: cómo se cumplen, tecnología y archivos |
 | [docs/despliegue-nube.md](docs/despliegue-nube.md) | Crear PostgreSQL en Neon/Supabase, migrar y verificar |
+| [docs/guia-exposicion.md](docs/guia-exposicion.md) | Dónde está cada cosa, guion de demo y preguntas probables |
 | [docs/analisis-ejemplo.md](docs/analisis-ejemplo.md) | Análisis de los proyectos de ejemplo (Java/Spring) y decisiones derivadas |
 
 ## Estructura

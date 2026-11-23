@@ -27,7 +27,7 @@ Para cada tecnología: qué es, por qué se eligió, alternativas consideradas y
 
 - **Qué es:** biblioteca de comunicación bidireccional sobre WebSocket con salas, reconexión automática y *acknowledgements*.
 - **Por qué:** cumple el requisito de broadcast: las **salas** (`sala:<id>`) mapean exactamente el dominio, el *ack* de suscripción
-  permite saber cuándo un cliente ya está escuchando (lo usan el cliente web, la consola, la demo y las pruebas), y existe
+  permite saber cuándo un cliente ya está escuchando (lo usan la consola, la demo y las pruebas), y existe
   cliente oficial para navegador y Node.
 - **Alternativas:** WebSocket nativo (`ws`: habría que programar salas, reconexión y acks), Server-Sent Events (solo servidor → cliente, sin salas).
 - **Dónde:** `server/src/broadcast/socketBridge.ts`; clientes: `clients/web/src/realtime.ts`, `clients/consola/src/cliente.ts`.

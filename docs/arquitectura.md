@@ -164,7 +164,7 @@ Entre ambos momentos pasan normalmente milisegundos, pero:
 - Una consulta inmediatamente posterior a un comando puede **no mostrar todavía** el cambio.
 - `GET /api/consultas/salas/{id}/mensajes` de una sala recién creada puede devolver `404` hasta que se proyecte `SalaCreada`.
 - El broadcast no depende de las tablas de lectura: los clientes se enteran por el evento, normalmente antes de que la consulta lo refleje.
-  Por eso el cliente web se suscribe a la sala **antes** de pedir el historial y deduplica por `id` de mensaje.
+  Por eso el cliente web se suscribe (`suscribir_todas`) al conectar, **antes** de pedir el historial, y deduplica por `id` de mensaje.
 - Si RabbitMQ no está disponible al publicar, el comando **no falla** (el evento está guardado); queda un registro de error en el
   log y la lectura/broadcast se recuperan con `npm run republish` (el proyector es idempotente). Limitación conocida: no hay
   patrón *outbox* automático; se documenta como mejora futura.
