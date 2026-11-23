@@ -27,12 +27,16 @@ export interface Config {
   logLevel: string;
 }
 
-/** Carga .env (si existe) desde el directorio actual o desde la raiz del repositorio. */
+/**
+ * Carga .env y .env.local (este ultimo lo escribe `neon deploy` / `neon env pull`) desde el
+ * directorio actual y desde la raiz del repositorio. Las variables ya definidas en el entorno
+ * tienen prioridad; entre archivos gana el primero cargado (.env antes que .env.local).
+ */
 export function loadDotEnv(): void {
-  for (const candidate of [resolve('.env'), resolve('..', '.env')]) {
-    if (existsSync(candidate)) {
-      process.loadEnvFile(candidate);
-      return;
+  for (const dir of [resolve('.'), resolve('..')]) {
+    for (const name of ['.env', '.env.local']) {
+      const candidate = resolve(dir, name);
+      if (existsSync(candidate)) process.loadEnvFile(candidate);
     }
   }
 }

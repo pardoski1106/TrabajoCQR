@@ -10,6 +10,22 @@ escriben en el repositorio: viven en `.env` (ignorado por git) o en variables de
    Tiene la forma `postgresql://USUARIO:CLAVE@HOST/BASE?sslmode=require`.
 3. Guárdala en tu `.env` local como `DATABASE_URL=...`.
 
+## Opción A2: Neon con su CLI (la usada en este proyecto)
+
+El repositorio incluye `neon.ts` (configuración de Neon como código; solo declara PostgreSQL) y `@neon/config`.
+
+```bash
+npx neon@latest login          # abre el navegador una vez
+npx neon@latest init -y --org-id <org-id> --project-id <project-id> --branch production --services postgres
+npx neon@latest deploy         # escribe DATABASE_URL (pooled) y otras variables en .env.local
+npm run migrate && npm run verify:db
+```
+
+El servidor lee `.env` y `.env.local` (`server/src/config.ts`), por lo que no hace falta copiar nada a mano.
+`.env.local`, `.env.*` y `.neon` están en `.gitignore`. Para pruebas de integración usa una rama de Neon aparte, nunca `production`:
+`neon checkout dev --create --no-env-pull`, `neon env pull --file .env.test.local`, `neon checkout production --no-env-pull`,
+y pasa esa `DATABASE_URL` como `TEST_DATABASE_URL`. Las ramas nuevas expiran a los 7 días (política en `neon.ts`).
+
 ## Opción B: Supabase
 
 1. Crea una cuenta en <https://supabase.com> y un proyecto nuevo (anota la contraseña de la base).

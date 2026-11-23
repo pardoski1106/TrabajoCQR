@@ -53,6 +53,7 @@ TrabajoCQR/
 ## Variables de entorno
 
 Copia `.env.example` a `.env` (Windows PowerShell: `Copy-Item .env.example .env`) y completa `DATABASE_URL`.
+Si usas el CLI de Neon (`neon deploy`), la variable queda en `.env.local`, que el servidor también lee.
 **`.env` está en `.gitignore`; nunca lo subas.**
 
 | Variable | Descripción | Por defecto |
