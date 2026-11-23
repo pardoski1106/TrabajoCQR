@@ -13,6 +13,7 @@ mensajería con **broadcast en tiempo real**: servidor aparte, dos clientes dist
 
 | Documento | Contenido |
 |---|---|
+| [docs/problematica.md](docs/problematica.md) | Problema que originó la solución y cómo la resuelve cada decisión |
 | [docs/arquitectura.md](docs/arquitectura.md) | Componentes, diagramas Mermaid (componentes y dos secuencias), consistencia eventual |
 | [docs/decisiones-tecnologicas.md](docs/decisiones-tecnologicas.md) | Qué es cada tecnología, por qué, alternativas (incl. Redis descartado), archivos, tecnologías nuevas |
 | [docs/requerimientos.md](docs/requerimientos.md) | R1–R9: cómo se cumplen, tecnología y archivos |
