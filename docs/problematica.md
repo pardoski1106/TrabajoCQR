@@ -32,10 +32,10 @@ Una pila de mensajería basada en **CQRS** y eventos con **broadcast**:
 | Problema | Cómo lo resuelve la solución | Dónde |
 |---|---|---|
 | P1 Información tardía | **Broadcast** por Socket.IO: el evento se empuja a todos los clientes suscritos, sin *polling* | `server/src/broadcast/` |
-| P2 Competencia lectura/escritura | **CQRS**: comandos escriben en `event_store`; las consultas leen tablas `read_*` separadas | `server/src/commands/`, `server/src/queries/` |
+| P2 Competencia lectura/escritura | **CQRS**: comandos escriben en `event_store`; las consultas leen de **MongoDB**, una base separada | `server/src/commands/`, `server/src/queries/` |
 | P3 Acoplamiento | Los lados se comunican solo por **eventos** en RabbitMQ (*fanout*); proyector y broadcast son consumidores independientes que pueden ejecutarse por separado (`ROLES`) | `server/src/messaging/`, `server/src/main.ts` |
 | P4 Trazabilidad | **Event store** inmutable: cada hecho queda con id, versión, fecha y contenido; permite auditar y reproyectar | `server/src/events/`, tabla `event_store` |
-| P5 Pérdida/duplicados | Colas durables, mensajes persistentes y confirmaciones; proyección **idempotente** (`ON CONFLICT DO NOTHING`); `npm run republish` para recuperar | `server/src/messaging/rabbit.ts`, `server/src/projections/` |
+| P5 Pérdida/duplicados | Colas durables, mensajes persistentes y confirmaciones; proyección **idempotente** (`upsert`); `npm run republish` para recuperar | `server/src/messaging/rabbit.ts`, `server/src/projections/` |
 | P6 Atadura a clientes | El servidor expone solo contratos (HTTP + eventos Socket.IO); web y consola son clientes independientes, y se pueden sumar más | `clients/web`, `clients/consola` |
 
 ## 5. Beneficios esperados
@@ -48,7 +48,7 @@ Una pila de mensajería basada en **CQRS** y eventos con **broadcast**:
 
 ## 6. Costo de la solución (trade-offs)
 
-- **Consistencia eventual:** la tabla de lectura se actualiza milisegundos después de la escritura (ver `arquitectura.md` §5).
+- **Consistencia eventual:** el modelo de lectura se actualiza milisegundos después de la escritura (ver `arquitectura.md` §5).
 - **Mayor complejidad** que un CRUD simple: más piezas (broker, proyector) que operar. Se justifica cuando importan la
   inmediatez, la trazabilidad y el desacople; no para una aplicación pequeña con un solo usuario.
 - **Alcance de esta entrega:** sin autenticación real ni patrón *outbox* (ver README, "Limitaciones conocidas").

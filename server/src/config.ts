@@ -7,6 +7,8 @@ export type Role = (typeof ROLES)[number];
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
+  MONGODB_URL: z.string().min(1).optional(),
+  MONGODB_DB: z.string().min(1).default('cqrs_query'),
   RABBITMQ_URL: z.string().min(1).default('amqp://guest:guest@localhost:5672'),
   RABBITMQ_EXCHANGE: z.string().min(1).default('cqrs.eventos'),
   PORT: z.coerce.number().int().min(0).max(65535).default(3000),
@@ -18,6 +20,9 @@ const envSchema = z.object({
 
 export interface Config {
   databaseUrl: string | undefined;
+  /** Si se define, el modelo de lectura (query) vive en MongoDB en vez de PostgreSQL. */
+  mongoUrl: string | undefined;
+  mongoDb: string;
   rabbitUrl: string;
   exchange: string;
   port: number;
@@ -58,6 +63,8 @@ export function parseConfig(env: NodeJS.ProcessEnv): Config {
   }
   return {
     databaseUrl: parsed.DATABASE_URL,
+    mongoUrl: parsed.MONGODB_URL,
+    mongoDb: parsed.MONGODB_DB,
     rabbitUrl: parsed.RABBITMQ_URL,
     exchange: parsed.RABBITMQ_EXCHANGE,
     port: parsed.PORT,

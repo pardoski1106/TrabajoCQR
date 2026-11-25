@@ -10,7 +10,7 @@ escriben en el repositorio: viven en `.env` (ignorado por git) o en variables de
    Tiene la forma `postgresql://USUARIO:CLAVE@HOST/BASE?sslmode=require`.
 3. Guárdala en tu `.env` local como `DATABASE_URL=...`.
 
-## Opción A2: Neon con su CLI (la usada en este proyecto)
+## Opción A2: Neon con su CLI
 
 El repositorio incluye `neon.ts` (configuración de Neon como código; solo declara PostgreSQL) y `@neon/config`.
 
@@ -30,7 +30,12 @@ y pasa esa `DATABASE_URL` como `TEST_DATABASE_URL`. Las ramas nuevas expiran a l
 
 1. Crea una cuenta en <https://supabase.com> y un proyecto nuevo (anota la contraseña de la base).
 2. En **Project Settings → Database → Connection string** copia la cadena **URI** (usa la de *Session pooler* si tu red no tiene IPv6).
-3. Reemplaza `[YOUR-PASSWORD]` y guárdala en `.env` como `DATABASE_URL=...` (añade `?sslmode=require` si no lo trae).
+3. Reemplaza `[YOUR-PASSWORD]` y guárdala en `.env` como `DATABASE_URL=...`, terminando en
+   `?sslmode=require&uselibpqcompat=true` (cifra sin verificar el certificado; sin esto `pg` suele rechazar el certificado del pooler).
+4. `npm run migrate` y, en Supabase, activa RLS en las tres tablas para que no queden expuestas por su API pública
+   (`ALTER TABLE event_store ENABLE ROW LEVEL SECURITY;` y lo mismo con `read_salas` y `read_mensajes`).
+
+**Esta es la opción en uso en el proyecto.**
 
 ## Aplicar las migraciones
 
@@ -61,7 +66,7 @@ Imprime la base y la versión de PostgreSQL y lista las tablas encontradas; term
 
 ## Qué corre en la nube y qué en local
 
-Solo PostgreSQL está en la nube. El servidor, RabbitMQ (Docker) y los clientes corren en tu equipo y se conectan a la base
+Solo PostgreSQL está en la nube. El servidor, MongoDB (Docker), RabbitMQ y los clientes corren en tu equipo y se conectan a la base
 por internet. Desplegar RabbitMQ en la nube es opcional (p. ej. CloudAMQP, plan gratuito): basta cambiar `RABBITMQ_URL`.
 
 ## Base separada para pruebas

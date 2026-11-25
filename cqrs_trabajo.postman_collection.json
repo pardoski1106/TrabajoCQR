@@ -1,0 +1,124 @@
+{
+  "info": {
+    "name": "TrabajoCQR - Mensajeria por salas (PostgreSQL + MongoDB + RabbitMQ)",
+    "description": "Servidor unico en http://localhost:3000.\nCOMANDOS (POST) -> PostgreSQL event_store -> RabbitMQ (exchange fanout cqrs.eventos) -> proyector -> MongoDB.\nCONSULTAS (GET) -> leen de MongoDB (cqrs_query).\n\nOrden: 0) Salud, 1) Crear sala, 2) Enviar mensaje, 3) Listar salas, 4) Listar mensajes.\nLas consultas pueden tardar unos ms en reflejar un comando (consistencia eventual).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "rabbitUrl", "value": "http://localhost:15672" },
+    { "key": "salaId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Salud del servidor",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/salud" }
+    },
+    {
+      "name": "COMANDOS (escritura) -> PostgreSQL",
+      "item": [
+        {
+          "name": "1. Crear sala  (CrearSala -> SalaCreada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('Devuelve salaId y eventId', () => { pm.expect(b.salaId).to.be.a('string'); pm.expect(b.eventId).to.exist; });",
+                  "pm.collectionVariables.set('salaId', b.salaId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Finanzas\"\n}" },
+            "url": "{{baseUrl}}/api/comandos/salas"
+          }
+        },
+        {
+          "name": "2. Enviar mensaje  (EnviarMensaje -> MensajeEnviado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('Devuelve mensajeId, eventId y version', () => { pm.expect(b.mensajeId).to.be.a('string'); pm.expect(b.version).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"autor\": \"Ana Torres · Gerente\",\n  \"texto\": \"Hola equipo, revisemos el presupuesto\"\n}" },
+            "url": "{{baseUrl}}/api/comandos/salas/{{salaId}}/mensajes"
+          }
+        },
+        {
+          "name": "Error 400 - crear sala sin nombre",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('400 validacion', () => pm.response.to.have.status(400));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/api/comandos/salas"
+          }
+        },
+        {
+          "name": "Error 404 - mensaje a sala inexistente",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('404 sala inexistente', () => pm.response.to.have.status(404));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"autor\": \"ana\",\n  \"texto\": \"hola\"\n}" },
+            "url": "{{baseUrl}}/api/comandos/salas/00000000-0000-0000-0000-000000000000/mensajes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "CONSULTAS (lectura) -> MongoDB",
+      "item": [
+        {
+          "name": "3. Listar salas  (ListarSalas)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));", "pm.test('Trae arreglo salas', () => pm.expect(pm.response.json().salas).to.be.an('array'));"] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/consultas/salas" }
+        },
+        {
+          "name": "4. Listar mensajes de la sala  (ListarMensajes)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));", "pm.test('Trae arreglo mensajes', () => pm.expect(pm.response.json().mensajes).to.be.an('array'));"] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/consultas/salas/{{salaId}}/mensajes?limite=50", "host": ["{{baseUrl}}"], "path": ["api", "consultas", "salas", "{{salaId}}", "mensajes"], "query": [{ "key": "limite", "value": "50" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "COLA RabbitMQ (API de administracion, guest/guest)",
+      "item": [
+        {
+          "name": "Ver exchange cqrs.eventos (fanout)",
+          "request": { "method": "GET", "header": [], "auth": { "type": "basic", "basic": [{ "key": "username", "value": "guest" }, { "key": "password", "value": "guest" }] }, "url": "{{rabbitUrl}}/api/exchanges/%2F/cqrs.eventos" }
+        },
+        {
+          "name": "Ver colas y consumidores",
+          "request": { "method": "GET", "header": [], "auth": { "type": "basic", "basic": [{ "key": "username", "value": "guest" }, { "key": "password", "value": "guest" }] }, "url": "{{rabbitUrl}}/api/queues" }
+        },
+        {
+          "name": "Ver enlaces (bindings) del exchange",
+          "request": { "method": "GET", "header": [], "auth": { "type": "basic", "basic": [{ "key": "username", "value": "guest" }, { "key": "password", "value": "guest" }] }, "url": "{{rabbitUrl}}/api/exchanges/%2F/cqrs.eventos/bindings/source" }
+        }
+      ]
+    }
+  ]
+}

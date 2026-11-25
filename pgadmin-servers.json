@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "CQRS command (5433)",
+      "Group": "Servers",
+      "Host": "localhost",
+      "Port": 5433,
+      "MaintenanceDB": "bd_command_cqrs",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "Comment": "Lado COMMAND (SQL) de TrabajoCQR. Clave: admin"
+    }
+  }
+}

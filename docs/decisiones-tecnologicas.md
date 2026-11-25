@@ -45,6 +45,13 @@ Para cada tecnología: qué es, por qué se eligió, alternativas consideradas y
   Otras: Kafka (el ejemplo lo usa de forma opcional; es excesivo para este volumen y para ejecutar en local), NATS.
 - **Dónde:** `server/src/messaging/rabbit.ts`; uso en `server/src/main.ts`; infraestructura en `docker-compose.yml`.
 
+## MongoDB (modelo de lectura)
+
+- **Qué es:** base de datos no relacional orientada a documentos.
+- **Por qué:** CQRS permite un modelo de lectura distinto al de escritura; cada sala y mensaje se guarda como documento listo para
+  consultar, y se usa una base relacional y otra no relacional, como en el ejercicio 2.
+- **Archivos:** `server/src/db/mongo.ts`, `server/src/projections/mongoReadModelWriter.ts`, `server/src/queries/mongoReadModel.ts`.
+
 ## PostgreSQL en la nube (Neon o Supabase) con el driver `pg`
 
 - **Qué es:** base de datos relacional; Neon y Supabase ofrecen plan gratuito gestionado.
@@ -53,9 +60,9 @@ Para cada tecnología: qué es, por qué se eligió, alternativas consideradas y
   read_mensajes). Se usa `pg` directamente (SQL explícito) porque el modelo es pequeño y así el SQL es visible para evaluar.
 - **Migraciones sin tabla de control:** los `.sql` son idempotentes (`IF NOT EXISTS`) y se aplican en orden; así la base queda
   en exactamente tres tablas. Contrapartida: no hay historial de migraciones aplicadas (aceptable para este alcance).
-- **Alternativas:** ORM (Prisma/TypeORM/JPA del ejemplo: más capas que no aportan aquí), MongoDB (el ejemplo lo usa en la lectura, pero el
-  enunciado exige PostgreSQL), una base distinta para lectura y escritura (se prefirió una sola base mínima con tablas separadas).
-- **Dónde:** `server/src/db/`, `server/migrations/`, `server/src/events/eventStore.ts`, `server/src/projections/pgReadModelWriter.ts`, `server/src/queries/pgReadModel.ts`.
+- **Alternativas:** ORM (Prisma/TypeORM/JPA del ejemplo: más capas que no aportan aquí). PostgreSQL se usa para escribir (lo exige
+  el enunciado) y MongoDB para leer; las tablas `read_*` quedan como modo alterno sin MongoDB.
+- **Dónde:** `server/src/db/`, `server/migrations/`, `server/src/events/eventStore.ts`, `server/src/projections/pgReadModelWriter.ts`, `server/src/queries/pgReadModel.ts` (modo alterno).
 
 ## zod (validación)
 
@@ -102,7 +109,7 @@ Para cada tecnología: qué es, por qué se eligió, alternativas consideradas y
 
 ## Docker Compose
 
-- **Por qué:** levantar RabbitMQ (y opcionalmente PostgreSQL local) con un comando y sin instalar nada. **Dónde:** `docker-compose.yml`.
+- **Por qué:** levantar MongoDB y RabbitMQ (y opcionalmente PostgreSQL local) con un comando y sin instalar nada. **Dónde:** `docker-compose.yml`.
 
 ## Tecnologías nuevas (no estaban en el ejemplo)
 
@@ -113,6 +120,7 @@ El ejemplo era Java/Spring Boot con JPA, Maven, Log4j2 y Kafka opcional. Todo lo
 | **Socket.IO** | Broadcast en tiempo real a clientes (el ejemplo solo sincronizaba servicios, sin clientes en vivo) |
 | **RabbitMQ (fanout)** | Entrega múltiple e independiente (proyector + broadcast) con durabilidad y acks; el ejemplo usaba HTTP punto a punto o Kafka opcional |
 | **Event store en PostgreSQL** | Registro inmutable de eventos con concurrencia optimista y capacidad de reproyectar; el ejemplo guardaba estado en una tabla |
+| **MongoDB** | Modelo de lectura en documentos, como en `ejercicio2_mongodb` |
 | **Fastify, zod, pino** | API ligera, validación tipada en todos los bordes y logs estructurados |
 | **React + Vite** | Primer cliente de usuario (el ejemplo solo se probaba con Postman) |
 | **Cliente de consola** | Segundo cliente, para demostrar desacople entre servidor y clientes |

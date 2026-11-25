@@ -3,7 +3,10 @@ import { buildApp } from './api/app';
 import { attachSocketIo, createBroadcaster } from './broadcast/socketBridge';
 import { createCrearSalaHandler, createEnviarMensajeHandler } from './commands/handlers';
 import { loadDotEnv, parseConfig } from './config';
+import { connectMongo } from './db/mongo';
 import { createPool } from './db/pool';
+import { MongoReadModelWriter } from './projections/mongoReadModelWriter';
+import { MongoReadModel } from './queries/mongoReadModel';
 import { PgEventStore } from './events/eventStore';
 import { RabbitBus } from './messaging/rabbit';
 import { createProjector } from './projections/projector';
@@ -27,11 +30,16 @@ const pool = config.databaseUrl ? createPool(config.databaseUrl) : undefined;
 const bus = await RabbitBus.connect(config.rabbitUrl, config.exchange, logger);
 const stops: Array<() => Promise<void>> = [];
 
+// Modelo de lectura: MongoDB (NoSQL) si hay MONGODB_URL; si no, tablas read_* en PostgreSQL.
+const needsReadStore = config.roles.has('api') || config.roles.has('projector');
+const mongo = config.mongoUrl && needsReadStore ? await connectMongo(config.mongoUrl, config.mongoDb) : undefined;
+if (mongo) logger.info({ db: config.mongoDb }, 'Modelo de lectura en MongoDB');
+
 // --- Rol api: comandos (escritura) y consultas (lectura) ---
 let apiParts = {};
 if (config.roles.has('api') && pool) {
   const deps = { store: new PgEventStore(pool), publisher: bus, logger };
-  const readModel = new PgReadModel(pool);
+  const readModel = mongo ? new MongoReadModel(mongo.db) : new PgReadModel(pool);
   apiParts = {
     commands: { crearSala: createCrearSalaHandler(deps), enviarMensaje: createEnviarMensajeHandler(deps) },
     queries: { listarSalas: createListarSalasHandler(readModel), listarMensajes: createListarMensajesHandler(readModel) },
@@ -42,7 +50,7 @@ const app = await buildApp({ logger, corsOrigin: config.corsOrigin, roles, ...ap
 
 // --- Rol projector: RabbitMQ -> tablas de lectura ---
 if (config.roles.has('projector') && pool) {
-  const project = createProjector(new PgReadModelWriter(pool));
+  const project = createProjector(mongo ? new MongoReadModelWriter(mongo.db) : new PgReadModelWriter(pool));
   stops.push(
     await bus.subscribe({ queue: `${config.exchange}.proyector`, name: 'proyector' }, async (event) => {
       await project(event);
@@ -77,6 +85,7 @@ async function shutdown(signal: string): Promise<void> {
   await app.close().catch(() => undefined);
   await bus.close();
   await pool?.end();
+  await mongo?.client.close().catch(() => undefined);
   process.exit(0);
 }
 process.on('SIGINT', () => void shutdown('SIGINT'));

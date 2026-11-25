@@ -1,11 +1,15 @@
 # TrabajoCQR — Mensajería por salas con CQRS y broadcast
 
 Aplicación de mensajería por salas que demuestra **CQRS** (comandos y consultas separados) sobre una pila de
-mensajería con **broadcast en tiempo real**: servidor aparte, dos clientes distintos (web y consola) y una base
-**PostgreSQL mínima en la nube**.
+mensajería con **broadcast en tiempo real**: servidor aparte, dos clientes distintos (web y consola) y dos bases:
+**PostgreSQL en la nube** (relacional, escritura) y **MongoDB** (no relacional, lectura).
+
+> **Para ejecutar en Windows:** `INICIAR.bat` / `DETENER.bat`. Bases, colas, Postman y errores comunes:
+> [README-BASES-Y-COLAS.md](README-BASES-Y-COLAS.md).
 
 - **Escritura:** comandos HTTP → validación → `event_store` (PostgreSQL) → RabbitMQ (exchange *fanout*).
-- **Lectura:** RabbitMQ → proyector → tablas `read_*` → consultas HTTP.
+- **Lectura:** RabbitMQ → proyector → colecciones `read_*` en MongoDB → consultas HTTP.
+  Sin `MONGODB_URL`, la lectura usa las tablas `read_*` de PostgreSQL (modo alterno).
 - **Broadcast:** RabbitMQ → servidor → Socket.IO → todos los clientes suscritos.
 - **Consistencia:** eventual entre escritura y lectura (ver [arquitectura](docs/arquitectura.md#5-consistencia-eventual-y-su-impacto)).
 
@@ -18,14 +22,15 @@ mensajería con **broadcast en tiempo real**: servidor aparte, dos clientes dist
 | [docs/decisiones-tecnologicas.md](docs/decisiones-tecnologicas.md) | Qué es cada tecnología, por qué, alternativas (incl. Redis descartado), archivos, tecnologías nuevas |
 | [docs/requerimientos.md](docs/requerimientos.md) | R1–R9: cómo se cumplen, tecnología y archivos |
 | [docs/despliegue-nube.md](docs/despliegue-nube.md) | Crear PostgreSQL en Neon/Supabase, migrar y verificar |
-| [docs/guia-exposicion.md](docs/guia-exposicion.md) | Dónde está cada cosa, guion de demo y preguntas probables |
+| [docs/guia-exposicion.md](docs/guia-exposicion.md) | Orden de la exposición, checklist de requerimientos y preguntas probables |
+| [README-BASES-Y-COLAS.md](README-BASES-Y-COLAS.md) | Dónde ver bases y colas, URLs de Postman y errores comunes |
 | [docs/analisis-ejemplo.md](docs/analisis-ejemplo.md) | Análisis de los proyectos de ejemplo (Java/Spring) y decisiones derivadas |
 
 ## Estructura
 
 ```
 TrabajoCQR/
-├── docker-compose.yml          RabbitMQ (+ PostgreSQL local opcional)
+├── docker-compose.yml          RabbitMQ y MongoDB (+ PostgreSQL local opcional)
 ├── .env.example                variables de entorno (sin valores reales)
 ├── docs/                       documentación
 ├── server/                     SERVIDOR
@@ -34,22 +39,23 @@ TrabajoCQR/
 │   ├── src/queries/            handlers de consultas (lectura)
 │   ├── src/events/             eventos de dominio y event store
 │   ├── src/messaging/          publicador/consumidor RabbitMQ
-│   ├── src/projections/        proyector a tablas de lectura
+│   ├── src/projections/        proyector al modelo de lectura
 │   ├── src/broadcast/          puente RabbitMQ → Socket.IO
-│   ├── src/db/                 pool pg y migraciones
+│   ├── src/db/                 pool pg, migraciones y conexión a MongoDB
 │   ├── src/main.ts             composición por roles
 │   ├── migrations/             SQL versionado (3 tablas)
 │   └── tests/                  unitarias e integración
 ├── clients/
 │   ├── web/                    cliente React + Vite
 │   └── consola/                cliente CLI (broadcast en vivo)
-└── scripts/                    demo.ts y republicar.ts
+├── scripts/                    demo.ts, republicar.ts, iniciar.ps1 y detener.ps1
+└── INICIAR.bat / DETENER.bat   arranque y apagado en Windows
 ```
 
 ## Requisitos previos
 
 - **Node.js ≥ 20.12** y npm (desarrollado con Node 20.20).
-- **Docker** (para RabbitMQ) o un RabbitMQ propio.
+- **Docker** (para MongoDB y, si no hay uno propio, RabbitMQ).
 - Una base **PostgreSQL en la nube** (Neon o Supabase, gratis). Ver [docs/despliegue-nube.md](docs/despliegue-nube.md).
 
 ## Variables de entorno
@@ -61,6 +67,7 @@ Si usas el CLI de Neon (`neon deploy`), la variable queda en `.env.local`, que e
 | Variable | Descripción | Por defecto |
 |---|---|---|
 | `DATABASE_URL` | Cadena de conexión PostgreSQL (obligatoria para los roles `api` y `projector`) | — |
+| `MONGODB_URL` / `MONGODB_DB` | MongoDB para el modelo de lectura | sin definir / `cqrs_query` |
 | `RABBITMQ_URL` | URL AMQP | `amqp://guest:guest@localhost:5672` |
 | `RABBITMQ_EXCHANGE` | Nombre del exchange fanout | `cqrs.eventos` |
 | `PORT` / `HOST` | Puerto y host del servidor | `3000` / `0.0.0.0` |
@@ -77,11 +84,11 @@ El cliente web usa `VITE_API_URL` (`clients/web/.env.example`, por defecto `http
 # 1. Dependencias (servidor y clientes, con npm workspaces)
 npm install
 
-# 2. RabbitMQ  (consola de administración: http://localhost:15672, guest/guest)
-docker compose up -d rabbitmq
+# 2. RabbitMQ  (consola de administración: http://localhost:15672, guest/guest) y MongoDB
+docker compose up -d rabbitmq mongo
 
 # 3. Base de datos: completa DATABASE_URL en .env y luego
-npm run migrate        # crea event_store, read_salas, read_mensajes
+npm run migrate        # crea event_store, read_salas, read_mensajes (las read_* solo se usan sin MongoDB)
 npm run verify:db      # comprueba la conexión y las tablas
 
 # 4. Servidor (API + proyector + broadcast en un proceso) -> http://localhost:3000
@@ -147,7 +154,7 @@ curl "http://localhost:3000/api/consultas/salas/<salaId>/mensajes?limite=20"
 ```
 
 La consola y el cliente web muestran los eventos al instante (broadcast). Para ver el log de eventos:
-`SELECT * FROM event_store ORDER BY id;` en tu consola SQL de Neon/Supabase.
+`SELECT * FROM event_store ORDER BY id;` en el SQL Editor de Supabase (o Neon).
 
 ## API
 
@@ -184,10 +191,12 @@ npm test
   - `clients/consola/tests/broadcast.test.ts`: levanta el servidor real (`ROLES=broadcast`), publica un evento en RabbitMQ y
     comprueba que el cliente de consola lo recibe. Requiere RabbitMQ.
 
-Última ejecución verificada (PostgreSQL 16 local en Docker + RabbitMQ local): `npm run lint` y `npm run typecheck` sin errores;
+Última ejecución verificada (25-11-2026, PostgreSQL local temporal + RabbitMQ local): `npm run lint` y `npm run typecheck` sin errores;
 `npm test` con 52 pruebas en el servidor (incluye 7 de integración) y 3 en la consola, todas en verde; `npm run demo` completa el flujo.
 Para ejecutar las pruebas de integración: `TEST_DATABASE_URL=postgresql://cqrs:cqrs@localhost:5440/cqrs npm test`
 (PowerShell: `$env:TEST_DATABASE_URL="..."; npm test`).
+
+Las pruebas de integración usan el modelo de lectura en PostgreSQL; el de MongoDB se verificó con el flujo manual.
 
 Las pruebas usan un exchange con nombre único por ejecución y lo borran al terminar.
 

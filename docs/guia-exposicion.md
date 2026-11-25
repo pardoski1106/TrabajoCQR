@@ -1,78 +1,94 @@
-# Guía de exposición: dónde está cada cosa
+# Guía de exposición
 
-Pensada para responder rápido cuando se pregunte "¿dónde está X?". Rutas relativas a la raíz del repositorio.
+Rutas relativas a la raíz del repositorio. Bases, colas, URLs y errores comunes:
+[README-BASES-Y-COLAS.md](../README-BASES-Y-COLAS.md).
 
 ## Qué hace el sistema (30 segundos)
 
-Intranet de mensajería por canales. Escribir y leer van por caminos separados (CQRS) y solo se comunican con **eventos**.
-RabbitMQ reparte cada evento por *fanout* a dos consumidores independientes: el **proyector** (actualiza las tablas de lectura)
-y el **broadcast** (avisa por Socket.IO a todos los clientes).
+Intranet de mensajería por canales. Escribir y leer van por caminos y **bases distintas** (CQRS) y se comunican con
+**eventos**. Se escribe en **PostgreSQL en la nube (Supabase)** y se lee de **MongoDB**. RabbitMQ reparte cada evento por
+*fanout* a dos consumidores: el **proyector** (guarda documentos en MongoDB) y el **broadcast** (avisa por Socket.IO).
 
 ```
-Cliente → POST comando → handler → event_store (PostgreSQL/Neon) → RabbitMQ (fanout)
-                                                                      ├─ proyector → read_salas / read_mensajes → GET consultas
-                                                                      └─ broadcast → Socket.IO → web y consola (en vivo)
+Cliente → POST comando → handler → event_store (PostgreSQL) → RabbitMQ (fanout)
+                                                               ├─ proyector → MongoDB → GET consultas
+                                                               └─ broadcast → Socket.IO → web y consola
 ```
+
+## Antes de empezar
+
+- [ ] Internet activo
+- [ ] `INICIAR.bat`, sin cerrar las ventanas que abre
+- [ ] Terminal con `npm run dev:consola`
+- [ ] Dos ventanas en http://localhost:5173 con empleados distintos
+- [ ] Supabase → Table Editor → `event_store`
+- [ ] Compass → `mongodb://localhost:27017` → `cqrs_query_supabase`
+- [ ] RabbitMQ → http://localhost:15672 (`guest` / `guest`)
+- [ ] Postman con `cqrs_trabajo.postman_collection.json`
+
+## Orden de la exposición
+
+| # | Tema | Qué mostrar | Qué decir |
+|---|---|---|---|
+| 1 | Problema y solución | `docs/problematica.md` | «Separé escritura y lectura con CQRS y los mensajes llegan en vivo» |
+| 2 | Arquitectura | `docs/arquitectura.md` | «Comando → PostgreSQL → RabbitMQ → MongoDB → consulta» |
+| 3 | Servidor y clientes | `server/`, `clients/web`, `clients/consola` | «Aplicaciones separadas que solo se comunican por la red» |
+| 4 | Broadcast | Escribir en una ventana web | El mensaje aparece en la otra y en la consola |
+| 5 | Comando | Postman «1. Crear sala» y «2. Enviar mensaje» | «201: el evento quedó guardado» |
+| 6 | Base relacional | Supabase `event_store` | Filas nuevas |
+| 7 | Cola | Exchanges → `cqrs.eventos` → Bindings | «No hay tópicos; no uso Kafka» |
+| 8 | Base no relacional | Compass `read_mensajes` → Refresh | Documento con el mismo `mensajeId` |
+| 9 | Consulta | Postman «3. Listar salas» y «4. Listar mensajes» | «Esta respuesta sale de MongoDB» |
+| 10 | Cierre | Errores 400 y 404 | Validación y consistencia eventual |
 
 ## "Muéstreme…" → archivo
 
-| Pregunta | Dónde | Línea / detalle |
+| Pregunta | Dónde |
+|---|---|
+| Los **comandos** | `server/src/commands/handlers.ts` |
+| Las **consultas** | `server/src/queries/handlers.ts`, `server/src/queries/mongoReadModel.ts` |
+| Las rutas HTTP | `server/src/api/commandRoutes.ts`, `server/src/api/queryRoutes.ts` |
+| Los **eventos** | `server/src/events/events.ts` |
+| El **event store** (SQL) | `server/src/events/eventStore.ts` |
+| La conexión a **MongoDB** | `server/src/db/mongo.ts`, `server/src/main.ts` |
+| El **proyector** | `server/src/projections/projector.ts`, `mongoReadModelWriter.ts` |
+| El **exchange fanout** | `server/src/messaging/rabbit.ts` |
+| El **broadcast** | `server/src/broadcast/socketBridge.ts` |
+| Concurrencia optimista | `server/migrations/001_event_store.sql`, `commands/handlers.ts` |
+| Validación y errores | `api/commandRoutes.ts`, `commands/handlers.ts`, `api/errorHandler.ts` |
+| Ejecutar por separado | variable `ROLES` en `server/src/main.ts` |
+| Clientes | `clients/web/src/`, `clients/consola/src/` |
+| Pruebas | `server/tests/`, `clients/consola/tests/` |
+
+`pgReadModel.ts`, `pgReadModelWriter.ts` y las tablas `read_*` de PostgreSQL son el modo alterno, que solo se usa sin `MONGODB_URL`.
+
+## Checklist de requerimientos
+
+| Req. | Qué pide | Cómo se demuestra |
 |---|---|---|
-| Los **comandos** (escritura) | `server/src/commands/handlers.ts` | `createCrearSalaHandler` (l. 64), `createEnviarMensajeHandler` (l. 75) |
-| Las **consultas** (lectura) | `server/src/queries/handlers.ts`, `server/src/queries/pgReadModel.ts` | solo leen `read_*` |
-| Las rutas HTTP | `server/src/api/commandRoutes.ts` (POST), `queryRoutes.ts` (GET) | `/api/comandos/...` y `/api/consultas/...` |
-| Los **eventos** y su contrato | `server/src/events/events.ts` | `domainEventSchema` (l. 32): `SalaCreada`, `MensajeEnviado` |
-| El **event store** | `server/src/events/eventStore.ts` | `INSERT INTO event_store` (l. 43), conflicto de versión (l. 50) |
-| Concurrencia optimista | `server/migrations/001_event_store.sql` (l. 12) y `commands/handlers.ts` (reintentos, l. 95) | `UNIQUE (aggregate_id, version)` |
-| El **exchange fanout** de RabbitMQ | `server/src/messaging/rabbit.ts` | `assertExchange(..., 'fanout')` (l. 25); mensajes persistentes (l. 36) |
-| Cola del proyector (compartida) y del broadcast (exclusiva) | `server/src/main.ts` (l. 47 y l. 60), `rabbit.ts` (l. 57–58) | |
-| El **proyector** | `server/src/projections/projector.ts`, `pgReadModelWriter.ts` | idempotente: `ON CONFLICT DO NOTHING` |
-| El **broadcast** (RabbitMQ → Socket.IO) | `server/src/broadcast/socketBridge.ts` | `createBroadcaster` (l. 28); suscripciones (l. 50, 64) |
-| Ejecutar componentes por separado | `server/src/main.ts` (l. 32, 44, 56) | variable `ROLES` |
-| **Validación** en el borde y en el dominio | borde: `api/commandRoutes.ts`; dominio: `commands/handlers.ts` | zod en ambos |
-| Errores HTTP coherentes | `server/src/api/errorHandler.ts` | 400 / 404 / 409 / 500 con formato único |
-| Logs estructurados | `server/src/main.ts` (pino) y logs de `rabbit.ts` | JSON en la terminal del servidor |
-| La **base de datos** (3 tablas) | `server/migrations/001_event_store.sql`, `002_read_models.sql` | índice `(sala_id, enviado_en)` |
-| Conexión a la nube (Neon) | `.env.local` (no se sube), `neon.ts`, `server/src/db/pool.ts` | `DATABASE_URL` por variable de entorno |
-| **Cliente web** | `clients/web/src/` (`App.tsx`, `FlowFeed.tsx`, `empresa.ts`) | HTTP + Socket.IO |
-| **Cliente de consola** | `clients/consola/src/cliente.ts`, `formato.ts`, `main.ts` | solo Socket.IO |
-| Contratos de los clientes (no importan el servidor) | `clients/web/src/contrato.ts`, `clients/consola/src/contrato.ts` | |
-| Pruebas | `server/tests/unit/`, `server/tests/integration/`, `clients/consola/tests/` | `npm test` |
-| Prueba comando → event_store → proyección → consulta | `server/tests/integration/flow.test.ts` | |
-| Prueba de broadcast hacia la consola | `clients/consola/tests/broadcast.test.ts` | levanta el servidor real |
-| Demo automática | `scripts/demo.ts` (`npm run demo`) | |
-| Recuperar eventos no publicados | `scripts/republicar.ts` (`npm run republish`) | |
-
-## Requerimientos → dónde se demuestran
-
-| Req. | Demostración en vivo | Documento |
-|---|---|---|
-| R1 Broadcast | Dos ventanas web + consola: un mensaje aparece en todas a la vez | `docs/arquitectura.md` §4 |
-| R2 Pila CQRS con mensajería | Panel "Flujo de datos" + `event_store` vs `read_*` en Neon | `docs/arquitectura.md` §2–3 |
-| R3 Servidor y ≥2 clientes | Carpetas `server/`, `clients/web`, `clients/consola` (cada una con su `package.json`) | README (Estructura) |
-| R4 GitHub | https://github.com/pardoski1106/TrabajoCQR (rama `main`) | — |
-| R5 Componentes claros | Tabla de componentes y diagrama | `docs/arquitectura.md` §1 |
-| R6 Justificación tecnológica | Una sección por tecnología (incl. Redis descartado) | `docs/decisiones-tecnologicas.md` |
-| R7 Cómo y en qué archivo | Tabla R1–R9 | `docs/requerimientos.md` |
-| R8 Tecnologías nuevas | Apartado final de decisiones | `docs/decisiones-tecnologicas.md` |
-| R9 PostgreSQL mínimo en la nube | Neon: 3 tablas | `docs/despliegue-nube.md` |
-
-## Pasos de la demo (5 min)
-
-1. Dos ventanas web (Laura, Gerente; Juan, Desarrollador) y la consola abierta (`npm run dev:consola`).
-2. Laura crea canales con los botones `+ General`, `+ Finanzas` → aparecen en la otra ventana sin recargar (broadcast).
-3. Escribir desde ambas ventanas; en el panel derecho se enciende el flujo y se ve la latencia.
-4. En el SQL Editor de Neon: `SELECT id, aggregate_id, version, tipo, payload FROM event_store ORDER BY id DESC;` (escritura) y
-   `SELECT * FROM read_mensajes ORDER BY enviado_en;` (lectura).
-5. Recargar la web: el historial viene de la consulta `GET /api/consultas/salas/{id}/mensajes`.
-6. Opcional: separar `ROLES` (ver README) para probar que los componentes corren por separado.
+| R1 | Broadcast | Dos ventanas web y la consola (paso 4) |
+| R2 | Mensajería con CQRS | Pasos 5 a 9 |
+| R3 | Servidor y al menos dos clientes | Pasos 3 y 4 |
+| R4 | Todo en GitHub | https://github.com/pardoski1106/TrabajoCQR |
+| R5 | Componentes claros | `docs/arquitectura.md` |
+| R6 | Justificación tecnológica | `docs/decisiones-tecnologicas.md` |
+| R7 | Cómo se usa y en qué archivo | `docs/requerimientos.md` |
+| R8 | Tecnologías nuevas justificadas | `docs/decisiones-tecnologicas.md` |
+| R9 | PostgreSQL en la nube | Supabase (paso 6) |
+| Extra | Base relacional y no relacional | Pasos 6 y 8 |
 
 ## Preguntas probables
 
-- **¿Qué es CQRS aquí?** Comandos (`commands/`) escriben eventos; consultas (`queries/`) leen otras tablas. Nunca se mezclan.
+- **¿Qué es CQRS?** Separar lo que modifica datos de lo que los consulta. Aquí cada lado tiene su propia base.
+- **¿Por qué dos bases?** PostgreSQL da transacciones y restricciones al escribir; MongoDB entrega documentos listos para leer.
+- **¿Dónde están los tópicos?** No hay: no se usa Kafka. El equivalente es el exchange `cqrs.eventos`.
+- **¿Qué es fanout?** Cada cola enlazada recibe una copia de todos los eventos.
 - **¿Por qué RabbitMQ y no Redis?** Redis Pub/Sub pierde eventos si el consumidor está caído; RabbitMQ tiene colas durables y acks.
-- **¿Qué es la consistencia eventual?** El 201 significa "evento guardado"; la tabla de lectura se actualiza milisegundos después.
-- **¿Qué pasa si dos usuarios escriben a la vez?** Versiones del agregado + `UNIQUE`: uno recibe conflicto y el handler reintenta.
-- **¿Y si RabbitMQ se cae al publicar?** El evento ya está guardado; `npm run republish` lo recupera. No hay *outbox* (limitación documentada).
-- **¿Los empleados y cargos son reales?** No: son datos de demostración del cliente (`clients/web/src/empresa.ts`); no hay autenticación.
-- **¿Por qué Node y no Java como el ejemplo?** Broadcast y clientes en vivo nativos de Node; ver `docs/analisis-ejemplo.md` §7.
+- **¿Qué es event sourcing?** Guardar los hechos ocurridos; `event_store` es ese historial.
+- **¿Qué es la consistencia eventual?** El 201 significa "evento guardado"; MongoDB se actualiza un instante después.
+- **¿Dos usuarios a la vez?** `UNIQUE (aggregate_id, version)`: el que choca reintenta, hasta 3 veces; después, 409.
+- **¿Y si RabbitMQ falla al publicar?** El evento queda en PostgreSQL; `npm run republish` lo recupera. No hay *outbox*.
+- **¿Y si falla MongoDB al proyectar?** Se reintenta una vez y se descarta; `npm run republish` lo recupera.
+- **¿Command y query son servicios separados?** Separados en código y rutas, en un mismo proceso. `ROLES` separa API, proyector y broadcast.
+- **¿En qué difiere del ejercicio 2?** Allí hay dos servicios y CRUD; aquí un proceso, solo crear y consultar, y SQL guarda eventos.
+- **¿Hay autenticación?** No. Los empleados y cargos son datos de demostración del cliente.

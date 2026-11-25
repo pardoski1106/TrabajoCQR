@@ -12,11 +12,11 @@ se comunican únicamente mediante **eventos de dominio** que se difunden por **b
 | Event store | `server/src/events/eventStore.ts` | Guardar eventos de forma inmutable con concurrencia optimista |
 | Definición de eventos | `server/src/events/events.ts` | Contrato (zod) de `SalaCreada` y `MensajeEnviado` |
 | Publicador / consumidor | `server/src/messaging/rabbit.ts` | Hablar con RabbitMQ (exchange fanout) |
-| Proyector | `server/src/projections/` | Convertir eventos en filas de las tablas de lectura (idempotente) |
+| Proyector | `server/src/projections/` | Convertir eventos en documentos de MongoDB (idempotente) |
 | API de consultas | `server/src/api/queryRoutes.ts` | Recibir `GET` y delegar en handlers de consulta |
-| Handlers de consultas | `server/src/queries/` | Leer solo las tablas `read_*` |
+| Handlers de consultas | `server/src/queries/` | Leer solo las colecciones `read_*` de MongoDB |
 | Puente de broadcast | `server/src/broadcast/socketBridge.ts` | Reenviar cada evento de RabbitMQ a los clientes Socket.IO |
-| Base de datos | `server/src/db/`, `server/migrations/` | Pool `pg` y migraciones SQL |
+| Bases de datos | `server/src/db/`, `server/migrations/` | PostgreSQL (`pg`, migraciones SQL) y MongoDB (`mongo.ts`) |
 | Composición | `server/src/main.ts` | Arrancar solo los roles pedidos en `ROLES` |
 | Cliente web | `clients/web/` | Enviar comandos, consultar y ver eventos en vivo |
 | Cliente de consola | `clients/consola/` | Suscribirse al broadcast y mostrar eventos |
@@ -45,8 +45,11 @@ flowchart LR
 
   RMQ{{RabbitMQ<br/>exchange fanout<br/>cqrs.eventos}}
 
-  subgraph PG["PostgreSQL en la nube"]
+  subgraph PG["PostgreSQL (escritura)"]
     ES[(event_store)]
+  end
+
+  subgraph MG["MongoDB (lectura)"]
     RS[(read_salas)]
     RM[(read_mensajes)]
   end
@@ -107,11 +110,12 @@ sequenceDiagram
 
 ## 3. Lado de lectura (consultas)
 
-`RabbitMQ → proyector → tablas read_* → API de consultas → cliente`
+`RabbitMQ → proyector → MongoDB (read_*) → API de consultas → cliente`
 
 El proyector consume de una **cola durable compartida** (`<exchange>.proyector`), por lo que cada evento se procesa una
-sola vez aunque haya varias instancias del proyector. Las inserciones usan `ON CONFLICT DO NOTHING`: si RabbitMQ entrega un
-evento dos veces (entrega "al menos una vez") o se republica con `npm run republish`, no se duplican filas.
+sola vez aunque haya varias instancias del proyector. Las escrituras usan `upsert` con `$setOnInsert`: si RabbitMQ entrega un
+evento dos veces (entrega "al menos una vez") o se republica con `npm run republish`, no se duplican documentos.
+Sin `MONGODB_URL`, el modelo de lectura usa las tablas `read_*` de PostgreSQL (modo alterno).
 
 ## 4. Broadcast
 
@@ -140,7 +144,7 @@ sequenceDiagram
   autonumber
   participant MQ as RabbitMQ (fanout)
   participant P as Proyector
-  participant DB as read_* (PostgreSQL)
+  participant DB as read_* (MongoDB)
   participant B as Puente de broadcast
   participant W as Cliente web (en la sala)
   participant C as Cliente consola (todas)
@@ -149,7 +153,7 @@ sequenceDiagram
   MQ-)P: evento MensajeEnviado (copia 1)
   MQ-)B: evento MensajeEnviado (copia 2)
   par proyección
-    P->>DB: INSERT read_mensajes ON CONFLICT DO NOTHING
+    P->>DB: upsert en read_mensajes
   and difusión
     B-->>W: "evento" (sala:<id>)
     B-->>C: "evento" (todas)
@@ -168,8 +172,8 @@ Entre ambos momentos pasan normalmente milisegundos, pero:
 - Si RabbitMQ no está disponible al publicar, el comando **no falla** (el evento está guardado); queda un registro de error en el
   log y la lectura/broadcast se recuperan con `npm run republish` (el proyector es idempotente). Limitación conocida: no hay
   patrón *outbox* automático; se documenta como mejora futura.
-- Dentro de una sala el orden se conserva (cola FIFO + versiones por agregado). Si un mensaje se proyectara antes que su sala,
-  fallaría la llave foránea, se reintentaría una vez y después se descartaría con log de error.
+- Dentro de una sala la cola entrega en orden FIFO. Si la proyección falla, se reintenta una vez y después se descarta con
+  log de error. MongoDB no tiene llave foránea (el modo alterno en PostgreSQL sí).
 
 ## 6. Ejecución por separado
 
@@ -177,8 +181,8 @@ Entre ambos momentos pasan normalmente milisegundos, pero:
 
 | `ROLES` | Necesita | Hace |
 |---|---|---|
-| `api` | PostgreSQL + RabbitMQ | Comandos y consultas HTTP |
-| `projector` | PostgreSQL + RabbitMQ | Mantiene `read_salas` y `read_mensajes` |
+| `api` | PostgreSQL + MongoDB + RabbitMQ | Comandos y consultas HTTP |
+| `projector` | MongoDB + RabbitMQ (la configuración exige también `DATABASE_URL`) | Mantiene `read_salas` y `read_mensajes` |
 | `broadcast` | RabbitMQ | Socket.IO (no usa base de datos) |
 
 Por defecto (`api,projector,broadcast`) corren juntos en un proceso; pueden separarse en tres procesos con puertos distintos.
